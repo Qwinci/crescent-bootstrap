@@ -1,0 +1,146 @@
+From af969e8e751d0ab638a65d67c7827d5b32732aea Mon Sep 17 00:00:00 2001
+From: Qwinci <32550582+Qwinci@users.noreply.github.com>
+Date: Wed, 20 Dec 2023 16:29:12 +0200
+Subject: [PATCH] Add Crescent support
+
+---
+ fixincludes/mkfixinc.sh     |  1 +
+ gcc/config.gcc              | 14 ++++++++++++++
+ gcc/config/crescent.h       | 33 +++++++++++++++++++++++++++++++++
+ libgcc/config.host          |  8 ++++++++
+ libstdc++-v3/crossconfig.m4 |  9 +++++++++
+ 5 files changed, 65 insertions(+)
+ create mode 100644 gcc/config/crescent.h
+
+diff --git a/fixincludes/mkfixinc.sh b/fixincludes/mkfixinc.sh
+index df90720b7..b25710de7 100755
+--- a/fixincludes/mkfixinc.sh
++++ b/fixincludes/mkfixinc.sh
+@@ -14,6 +14,7 @@ case $machine in
+     i?86-*-cygwin* | \
+     i?86-*-mingw32* | \
+     x86_64-*-mingw32* | \
++    *-*-crescent* | \
+     powerpc-*-eabisim* | \
+     powerpc-*-eabi*    | \
+     powerpc-*-rtems*   | \
+diff --git a/gcc/config.gcc b/gcc/config.gcc
+index 648b3dc21..84893c624 100644
+--- a/gcc/config.gcc
++++ b/gcc/config.gcc
+@@ -927,6 +927,17 @@ case ${target} in
+       ;;
+   esac
+   ;;
++*-*-crescent*)
++  extra_options="$extra_options gnu-user.opt"
++  gas=yes
++  gnu_ld=yes
++  default_use_cxa_atexit=yes
++  use_gcc_stdint=wrap
++  tmake_file="${tmake_file} t-slibgcc"
++  case ${enable_threads} in
++    "" | yes | posix) thread_file='posix' ;;
++  esac
++  ;;
+ *-*-netbsd*)
+   tm_p_file="${tm_p_file} netbsd-protos.h"
+   tmake_file="t-netbsd t-slibgcc"
+@@ -2218,6 +2229,9 @@ x86_64-*-fuchsia*)
+ 	tmake_file="${tmake_file} i386/t-x86_64-elf"
+ 	tm_file="${tm_file} i386/unix.h i386/att.h elfos.h newlib-stdint.h i386/i386elf.h i386/x86-64.h fuchsia.h"
+ 	;;
++x86_64-*-crescent*)
++	tm_file="${tm_file} i386/unix.h i386/att.h elfos.h gnu-user.h glibc-stdint.h i386/x86-64.h i386/gnu-user-common.h i386/gnu-user64.h crescent.h"
++	;;
+ ia64*-*-elf*)
+ 	tm_file="${tm_file} elfos.h newlib-stdint.h ia64/sysv4.h ia64/elf.h"
+ 	tmake_file="ia64/t-ia64"
+diff --git a/gcc/config/crescent.h b/gcc/config/crescent.h
+new file mode 100644
+index 000000000..afa601c1b
+--- /dev/null
++++ b/gcc/config/crescent.h
+@@ -0,0 +1,33 @@
++#undef TARGET_CRESCENT
++#define TARGET_CRESCENT 1
++
++#undef LIB_SPEC
++#define LIB_SPEC "-lc"
++
++#undef GNU_USER_DYNAMIC_LINKER
++#define GNU_USER_DYNAMIC_LINKER32 "/usr/lib/ld32.so"
++#define GNU_USER_DYNAMIC_LINKER64 "/usr/lib/ld.so"
++#define GNU_USER_DYNAMIC_LINKERX32 "/usr/lib/ldx32.so"
++
++#define GNU_USER_LINK_EMULATION32 "elf_i386"
++#define GNU_USER_LINK_EMULATION64 "elf_x86_64"
++#define GNU_USER_LINK_EMULATIONX32 "elf32_x86_64"
++
++#undef	LINK_SPEC
++#define LINK_SPEC GNU_USER_TARGET_LINK_SPEC
++
++#undef  STARTFILE_SPEC
++#define STARTFILE_SPEC GNU_USER_TARGET_STARTFILE_SPEC
++
++#undef  ENDFILE_SPEC
++#define ENDFILE_SPEC GNU_USER_TARGET_ENDFILE_SPEC
++
++#undef TARGET_OS_CPP_BUILTINS
++#define TARGET_OS_CPP_BUILTINS() \
++  do { \
++    builtin_define ("__crescent__"); \
++	builtin_define ("__unix__"); \
++	builtin_assert ("system=crescent"); \
++	builtin_assert ("system=unix"); \
++	builtin_assert ("system=posix"); \
++} while (0);
+diff --git a/libgcc/config.host b/libgcc/config.host
+index 9d7212028..5f6967423 100644
+--- a/libgcc/config.host
++++ b/libgcc/config.host
+@@ -288,6 +288,10 @@ case ${host} in
+     extra_parts="$extra_parts vtv_start.o vtv_end.o vtv_start_preinit.o vtv_end_preinit.o"
+   fi
+   ;;
++*-*-crescent*)
++  extra_parts="crtbegin.o crtbeginS.o crtbeginT.o crtend.o crtendS.o"
++  tmake_file="$tmake_file t-crtstuff-pic t-libgcc-pic t-slibgcc t-slibgcc-gld t-slibgcc-elf-ver"
++  ;;
+ *-*-lynxos*)
+   tmake_file="$tmake_file t-lynx $cpu_type/t-crtstuff t-crtstuff-pic t-libgcc-pic"
+   extra_parts="crtbegin.o crtbeginS.o crtend.o crtendS.o"
+@@ -775,6 +779,10 @@ x86_64-*-gnu*)
+ 	tm_file="${tm_file} i386/elf-lib.h"
+ 	md_unwind_header=i386/gnu-unwind.h
+ 	;;
++x86_64-*-crescent*)
++	extra_parts="$extra_parts crtprec32.o crtprec64.o crtprec80.o crtfastmath.o"
++	tmake_file="${tmake_file} i386/t-crtpc t-crtfm i386/t-crtstuff t-dfprules"
++	;;
+ i[34567]86-pc-msdosdjgpp*)
+ 	;;
+ i[34567]86-*-lynxos*)
+diff --git a/libstdc++-v3/crossconfig.m4 b/libstdc++-v3/crossconfig.m4
+index b3269cb88..1adbd2613 100644
+--- a/libstdc++-v3/crossconfig.m4
++++ b/libstdc++-v3/crossconfig.m4
+@@ -190,6 +190,15 @@ case "${host}" in
+     AC_CHECK_FUNCS(secure_getenv)
+     AM_ICONV
+     ;;
++  *-crescent*)
++    GLIBCXX_CHECK_COMPILER_FEATURES
++    GLIBCXX_CHECK_LINKER_FEATURES
++    GLIBCXX_CHECK_MATH_SUPPORT
++    GLIBCXX_CHECK_STDLIB_SUPPORT
++    GCC_CHECK_TLS
++    AC_CHECK_FUNCS(aligned_alloc posix_memalign memalign _aligned_malloc)
++    AC_CHECK_FUNCS(timespec_get)
++	;;
+   *-mingw32*)
+     GLIBCXX_CHECK_LINKER_FEATURES
+     GLIBCXX_CHECK_MATH_SUPPORT
+-- 
+2.41.0
+

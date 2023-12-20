@@ -1,0 +1,25 @@
+From d7c1bd78c5a7aa00ff5ace365fc7230fc5196400 Mon Sep 17 00:00:00 2001
+From: Qwinci <32550582+Qwinci@users.noreply.github.com>
+Date: Wed, 20 Dec 2023 16:25:41 +0200
+Subject: [PATCH] Add Crescent support
+
+---
+ config.sub | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/config.sub b/config.sub
+index defe52c..a31c1a0 100755
+--- a/config.sub
++++ b/config.sub
+@@ -1766,7 +1766,7 @@ case $os in
+ 	     | onefs* | tirtos* | phoenix* | fuchsia* | redox* | bme* \
+ 	     | midnightbsd* | amdhsa* | unleashed* | emscripten* | wasi* \
+ 	     | nsk* | powerunix* | genode* | zvmoe* | qnx* | emx* | zephyr* \
+-	     | fiwix* | mlibc* | cos* | mbr* )
++	     | fiwix* | mlibc* | cos* | mbr* | crescent* )
+ 		;;
+ 	# This one is extra strict with allowed versions
+ 	sco3.2v2 | sco3.2v[4-9]* | sco5v6*)
+-- 
+2.41.0
+

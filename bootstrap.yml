@@ -1,0 +1,356 @@
+imports:
+  - file: bootstrap.d/meta-pkgs.yml
+
+general:
+  mandate_hashes_for_archives: true
+
+declare_options:
+  - name: arch
+    default: x86_64
+  - name: arch-triple
+    default: x86_64-crescent
+
+sources:
+  - name: binutils
+    subdir: 'pkgs'
+    url: 'https://ftp.gnu.org/gnu/binutils/binutils-2.41.tar.xz'
+    checksum: 'blake2b:3bccec2b52f7e82a727121bf2a2e51a6249ba63dcd74c665fd834e858645c912ffd8245d848435288b938852830b482905606f55c40df4061215fd75c52ffc75'
+    extract_path: 'binutils-2.41'
+    format: 'tar.xz'
+    sources_required: ['gnuconfig']
+    version: '2.41'
+    patch-path-strip: 1
+    regenerate:
+      - args: ['cp', '@SOURCE_ROOT@/pkgs/gnuconfig/config.sub', '@THIS_SOURCE_DIR@/.']
+      - args: ['cp', '@SOURCE_ROOT@/pkgs/gnuconfig/config.guess', '@THIS_SOURCE_DIR@/.']
+
+  - name: gcc
+    subdir: 'pkgs'
+    url: 'https://ftp.gnu.org/gnu/gcc/gcc-13.2.0/gcc-13.2.0.tar.xz'
+    checksum: 'blake2b:0034b29d3d6cc05821f0c4253ce077805943aff7b370729dd203bda57d89c107edd657eeddc2fb1e69ea15c7b0323b961f46516c7f4af89a3ccf7fea84701be2'
+    extract_path: 'gcc-13.2.0'
+    format: 'tar.xz'
+    sources_required: ['gnuconfig']
+    tools_required:
+      - host-autoconf-v2.69
+    version: '13.2.0'
+    patch-path-strip: 1
+    regenerate:
+      - args: ['cp', '@SOURCE_ROOT@/pkgs/gnuconfig/config.sub', '@THIS_SOURCE_DIR@/.']
+      - args: ['cp', '@SOURCE_ROOT@/pkgs/gnuconfig/config.guess', '@THIS_SOURCE_DIR@/.']
+      - args: ['autoconf']
+        workdir: '@THIS_SOURCE_DIR@/libstdc++-v3'
+
+  - name: gnuconfig
+    subdir: 'pkgs'
+    git: 'https://git.savannah.gnu.org/git/config.git'
+    branch: 'master'
+    commit: '28ea239c53a2d5d8800c472bc2452eaa16e37af2'
+    version: '20230919'
+
+  - name: crescent
+    git: 'https://github.com/Qwinci/crescent.git'
+    branch: 'main_c'
+    rolling_version: true
+    version: '0.0pl@ROLLING_ID@'
+
+  - name: mlibc
+    git: 'https://github.com/Qwinci/mlibc.git'
+    branch: 'master'
+    rolling_version: true
+    version: '0.0pl@ROLLING_ID@'
+    sources_required:
+      - crescent
+    regenerate:
+      - args: ['ln', '-s', '@SOURCE_ROOT@/crescent', '@THIS_SOURCE_DIR@/subprojects']
+
+tools:
+  - name: cross-binutils
+    from_source: binutils
+    revision: 1
+    configure:
+      - args:
+        - '@THIS_SOURCE_DIR@/configure'
+        - '--prefix=@PREFIX@'
+        - '--target=@OPTION:arch-triple@'
+        - '--with-sysroot=@SYSROOT_DIR@'
+        - '--disable-werror'
+        - '--disable-nls'
+        - 'CFLAGS=-O2'
+    compile:
+      - args: ['make', '-j@PARALLELISM@', 'all-binutils', 'all-gas', 'all-ld']
+    install:
+      - args: ['make', '-j@PARALLELISM@', 'install-binutils', 'install-gas', 'install-ld']
+
+  - name: host-autoconf-v2.69
+    source:
+      name: autoconf-v2.69
+      subdir: 'pkgs'
+      url: 'https://ftp.gnu.org/gnu/autoconf/autoconf-2.69.tar.xz'
+      format: 'tar.xz'
+      checksum: 'blake2b:71d33d72a06e9a05fbed0eda73bc9d8a3805c7c90bf082959862f93f3c5f01192114176e84d84ecb58fa99512eafbc0ab21ad1407be18c8c63bb3dc1117c482d'
+      extract_path: 'autoconf-2.69'
+      version: '2.69'
+    revision: 1
+    configure:
+      - args: ['@THIS_SOURCE_DIR@/configure', '--prefix=@PREFIX@']
+    compile:
+      - args: ['make', '-j@PARALLELISM@']
+    install:
+      - args: ['make', '-j@PARALLELISM@', 'install']
+
+  - name: bootstrap-cross-gcc
+    from_source: gcc
+    tools_required:
+      - tool: cross-binutils
+        recursive: true
+    revision: 1
+    configure:
+      - args:
+        - '@THIS_SOURCE_DIR@/configure'
+        - '--prefix=@PREFIX@'
+        - '--target=@OPTION:arch-triple@'
+        - '--with-sysroot=@SYSROOT_DIR@'
+        - '--without-headers'
+        - '--without-newlib'
+        - '--enable-languages=c,c++'
+        - '--disable-shared'
+        - '--disable-hosted-libstdcxx'
+        - '--disable-wchar_t'
+        - '--disable-libssp'
+        - '--disable-libsanitizer'
+        - '--disable-libquadmath'
+        - '--enable-default-pie'
+        - 'CFLAGS=-O2'
+        - 'CXXFLAGS=-O2'
+    stages:
+      - name: compiler
+        pkgs_required:
+          - mlibc-headers
+        compile:
+          - args: ['make', '-j@PARALLELISM@', 'all-gcc']
+        install:
+          - args: ['make', 'install-gcc', '-j@PARALLELISM@']
+          - args: ['mkdir', '-p', '@PREFIX@/@OPTION:arch-triple@/bin']
+          - args: ['ln', '-sf', '../../../cross-binutils/@OPTION:arch-triple@/bin/as',
+                  '@PREFIX@/@OPTION:arch-triple@/bin/as']
+          - args: ['ln', '-sf', '../../../cross-binutils/@OPTION:arch-triple@/bin/ld',
+                  '@PREFIX@/@OPTION:arch-triple@/bin/ld']
+      - name: libgcc
+        tools_required:
+          - tool: bootstrap-cross-gcc
+            stage_dependencies: [compiler]
+        compile:
+          - args: ['make', '-j@PARALLELISM@', 'all-target-libgcc']
+        install:
+          - args: ['make', '-j@PARALLELISM@', 'install-target-libgcc']
+      - name: libstdc++-v3
+        tools_required:
+          - tool: bootstrap-cross-gcc
+            stage_dependencies: [libgcc]
+        compile:
+          - args: ['make', '-j@PARALLELISM@', 'all-target-libstdc++-v3']
+        install:
+          - args: ['make', '-j@PARALLELISM@', 'install-target-libstdc++-v3']
+
+  - name: cross-gcc
+    from_source: gcc
+    tools_required:
+      - tool: cross-binutils
+        recursive: true
+    revision: 1
+    configure:
+      - args:
+        - '@THIS_SOURCE_DIR@/configure'
+        - '--prefix=@PREFIX@'
+        - '--target=@OPTION:arch-triple@'
+        - '--with-sysroot=@SYSROOT_DIR@'
+        - '--enable-languages=c,c++'
+        - '--enable-initfini-array'
+        - '--enable-libstdcxx-filesystem-ts'
+        - '--enable-default-pie'
+        - '--disable-libssp'
+        - 'CFLAGS=-O2'
+        - 'CXXFLAGS=-O2'
+    stages:
+      - name: compiler
+        pkgs_required:
+          - mlibc-headers
+        compile:
+          - args: ['make', '-j@PARALLELISM@', 'all-gcc']
+        install:
+          - args: ['make', 'install-gcc', '-j@PARALLELISM@']
+          - args: ['mkdir', '-p', '@PREFIX@/@OPTION:arch-triple@/bin']
+          - args: ['ln', '-sf', '../../../cross-binutils/@OPTION:arch-triple@/bin/as',
+                  '@PREFIX@/@OPTION:arch-triple@/bin/as']
+          - args: ['ln', '-sf', '../../../cross-binutils/@OPTION:arch-triple@/bin/ld',
+                  '@PREFIX@/@OPTION:arch-triple@/bin/ld']
+      - name: libgcc
+        tools_required:
+          - tool: cross-gcc
+            stage_dependencies: [compiler]
+        pkgs_required:
+          - mlibc
+        compile:
+          - args: ['make', '-j@PARALLELISM@', 'all-target-libgcc']
+        install:
+          - args: ['make', '-j@PARALLELISM@', 'install-target-libgcc']
+      - name: libstdc++-v3
+        tools_required:
+          - tool: cross-gcc
+            stage_dependencies: [libgcc]
+        compile:
+          - args: ['make', '-j@PARALLELISM@', 'all-target-libstdc++-v3']
+        install:
+          - args: ['make', '-j@PARALLELISM@', 'install-target-libstdc++-v3']
+
+  - name: host-limine
+    source:
+      subdir: 'pkgs'
+      git: 'https://github.com/limine-bootloader/limine.git'
+      tag: 'v6.20231216.0-binary'
+      version: '6.20231216.0'
+    compile:
+      - args: ['make', '-j@PARALLELISM@', '-C', '@THIS_SOURCE_DIR@']
+    install:
+      - args: ['make', '-j@PARALLELISM@', '-C', '@THIS_SOURCE_DIR@', 'install']
+        environ:
+          PREFIX: '/'
+          DESTDIR: '@PREFIX@'
+      - args: ['mv', '@PREFIX@/bin/limine', '@PREFIX@/share/limine/']
+
+packages:
+  - name: crescent
+    from_source: crescent
+    tools_required:
+      - cross-gcc
+    configure:
+      - args:
+        - 'cmake'
+        - '-GNinja'
+        - '-DCMAKE_BUILD_TYPE=Debug'
+        - '-DCMAKE_TOOLCHAIN_FILE=@SOURCE_ROOT@/cross/cmake-@OPTION:arch-triple@.cmake'
+        - '-DCMAKE_INSTALL_PREFIX=/usr'
+        - '@THIS_SOURCE_DIR@/kernel'
+    build:
+      - args: ['ninja']
+      - args: ['ninja', 'install']
+        environ:
+          DESTDIR: '@THIS_COLLECT_DIR@'
+        quiet: true
+
+  - name: crescent-apps
+    from_source: crescent
+    tools_required:
+      - cross-gcc
+    pkgs_required:
+      - crescent
+      - mlibc
+    configure:
+      - args:
+        - 'cmake'
+        - '-GNinja'
+        - '-DCMAKE_BUILD_TYPE=Debug'
+        - '-DCMAKE_TOOLCHAIN_FILE=@SOURCE_ROOT@/cross/cmake-@OPTION:arch-triple@.cmake'
+        - '-DCMAKE_INSTALL_PREFIX=/usr'
+        - '@THIS_SOURCE_DIR@/apps'
+    build:
+      - args: ['ninja']
+      - args: ['ninja', 'install']
+        environ:
+          DESTDIR: '@THIS_COLLECT_DIR@'
+        quiet: true
+
+  - name: mlibc-headers
+    from_source: mlibc
+    configure:
+      - args:
+        - 'meson'
+        - 'setup'
+        - '--cross-file=@SOURCE_ROOT@/cross/meson-@OPTION:arch-triple@.toml'
+        - '--prefix=/usr'
+        - '-Dheaders_only=true'
+        - '@THIS_SOURCE_DIR@'
+    build:
+      - args: ['ninja']
+      - args: ['ninja', 'install']
+        environ:
+          DESTDIR: '@THIS_COLLECT_DIR@'
+        quiet: true
+
+  - name: mlibc
+    from_source: mlibc
+    tools_required:
+      - bootstrap-cross-gcc
+      - virtual: pkgconfig-for-target
+        triple: '@OPTION:arch-triple@'
+    pkgs_required:
+      - mlibc-headers
+    configure:
+      - args:
+        - 'meson'
+        - 'setup'
+        - '--cross-file=@SOURCE_ROOT@/cross/meson-@OPTION:arch-triple@.toml'
+        - '--prefix=/usr'
+        - '--libdir=lib'
+        - '--buildtype=debugoptimized'
+        - '-Dmlibc_no_headers=true'
+        - '@THIS_SOURCE_DIR@'
+    build:
+      - args: ['ninja']
+      - args: ['ninja', 'install']
+        environ:
+          DESTDIR: '@THIS_COLLECT_DIR@'
+        quiet: true
+
+tasks:
+  - name: create-image
+    tools_required:
+      - host-limine
+    args:
+      - '@SOURCE_ROOT@/scripts/create_image.sh'
+    environ:
+      LIMINE_PATH: '@BUILD_ROOT@/tools/host-limine/share/limine'
+    workdir: '@BUILD_ROOT@'
+
+  - name: update-image
+    tasks_required:
+      - task: create-image
+        order_only: true
+      - task: update-initrd
+    args:
+      - '@SOURCE_ROOT@/scripts/update_image.sh'
+    environ:
+      BUILD_DIR: '@BUILD_ROOT@'
+    workdir: '@BUILD_ROOT@'
+
+  - name: update-initrd
+    pkgs_required:
+      - crescent
+    args:
+      - 'tar'
+      - '-cf'
+      - 'initramfs.tar'
+      - '-C'
+      - 'system-root'
+      - '.'
+    workdir: '@BUILD_ROOT@'
+
+  - name: qemu
+    tasks_required:
+      - task: update-image
+        order_only: true
+    args:
+      - '@SOURCE_ROOT@/scripts/qemu.py'
+      - '@OPTION:arch@'
+    workdir: '@BUILD_ROOT@'
+
+  - name: qemu-debug
+    tasks_required:
+      - task: update-image
+        order_only: true
+    args:
+      - '@SOURCE_ROOT@/scripts/qemu.py'
+      - '@OPTION:arch@'
+      - '--debug'
+    workdir: '@BUILD_ROOT@'

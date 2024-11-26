@@ -1,0 +1,165 @@
+From c8ec9ee0b830d83a366cae288cb0410f3cd62698 Mon Sep 17 00:00:00 2001
+From: Qwinci <32550582+Qwinci@users.noreply.github.com>
+Date: Mon, 25 Nov 2024 18:03:52 +0200
+Subject: [PATCH 1/6] Add crescent support to llvm
+
+---
+ llvm/cmake/modules/HandleLLVMOptions.cmake |  2 ++
+ llvm/include/llvm-c/DataTypes.h            | 13 ++++++++++++-
+ llvm/include/llvm/ADT/bit.h                |  4 ++++
+ llvm/include/llvm/Support/FileSystem.h     |  4 +++-
+ llvm/include/llvm/Support/Program.h        |  5 ++++-
+ llvm/include/llvm/TargetParser/Triple.h    |  5 +++++
+ llvm/lib/TargetParser/Triple.cpp           |  2 ++
+ 7 files changed, 32 insertions(+), 3 deletions(-)
+
+diff --git a/llvm/cmake/modules/HandleLLVMOptions.cmake b/llvm/cmake/modules/HandleLLVMOptions.cmake
+index f19125eb6b..60deb9f506 100644
+--- a/llvm/cmake/modules/HandleLLVMOptions.cmake
++++ b/llvm/cmake/modules/HandleLLVMOptions.cmake
+@@ -227,6 +227,8 @@ elseif(FUCHSIA OR UNIX)
+   else()
+     set(LLVM_HAVE_LINK_VERSION_SCRIPT 1)
+   endif()
++elseif(CMAKE_SYSTEM_NAME STREQUAL "Crescent")
++  set(LLVM_HAVE_LINK_VERSION_SCRIPT 1)
+ elseif(CMAKE_SYSTEM_NAME STREQUAL "Generic")
+   set(LLVM_ON_WIN32 0)
+   set(LLVM_ON_UNIX 0)
+diff --git a/llvm/include/llvm-c/DataTypes.h b/llvm/include/llvm-c/DataTypes.h
+index 4eb0ac97d9..7c88588a91 100644
+--- a/llvm/include/llvm-c/DataTypes.h
++++ b/llvm/include/llvm-c/DataTypes.h
+@@ -27,7 +27,7 @@
+ #include <inttypes.h>
+ #include <stdint.h>
+ 
+-#ifndef _MSC_VER
++#if !defined(_MSC_VER) && !defined(__crescent__)
+ 
+ #if !defined(UINT32_MAX)
+ # error "The standard header <cstdint> is not C++11 compliant. Must #define "\
+@@ -48,6 +48,17 @@
+ #undef INT64_MIN
+ #endif
+ 
++#elif defined(__crescent__)
++#ifdef __cplusplus
++#include <cstddef>
++#include <cstdlib>
++#else
++#include <stddef.h>
++#include <stdlib.h>
++#endif
++
++typedef long ssize_t;
++
+ #else /* _MSC_VER */
+ #ifdef __cplusplus
+ #include <cstddef>
+diff --git a/llvm/include/llvm/ADT/bit.h b/llvm/include/llvm/ADT/bit.h
+index c42b5e686b..89fd6d7501 100644
+--- a/llvm/include/llvm/ADT/bit.h
++++ b/llvm/include/llvm/ADT/bit.h
+@@ -47,6 +47,10 @@
+ #define BIG_ENDIAN 4321
+ #define LITTLE_ENDIAN 1234
+ #define BYTE_ORDER BIG_ENDIAN
++#elif defined(__crescent__)
++#define BIG_ENDIAN __ORDER_BIG_ENDIAN__
++#define LITTLE_ENDIAN __ORDER_LITTLE_ENDIAN__
++#define BYTE_ORDER __BYTE_ORDER__
+ #else
+ #if !defined(BYTE_ORDER) && !defined(_WIN32)
+ #include <machine/endian.h>
+diff --git a/llvm/include/llvm/Support/FileSystem.h b/llvm/include/llvm/Support/FileSystem.h
+index 9cf53360b4..44b9015ded 100644
+--- a/llvm/include/llvm/Support/FileSystem.h
++++ b/llvm/include/llvm/Support/FileSystem.h
+@@ -55,6 +55,8 @@ namespace fs {
+ #if defined(_WIN32)
+ // A Win32 HANDLE is a typedef of void*
+ using file_t = void *;
++#elif defined(__crescent__)
++using file_t = size_t;
+ #else
+ using file_t = int;
+ #endif
+@@ -198,7 +200,7 @@ public:
+   /// same machine.
+   TimePoint<> getLastModificationTime() const;
+ 
+-  #if defined(LLVM_ON_UNIX)
++  #if defined(LLVM_ON_UNIX) || defined(__crescent__)
+   uint32_t getUser() const { return fs_st_uid; }
+   uint32_t getGroup() const { return fs_st_gid; }
+   uint64_t getSize() const { return fs_st_size; }
+diff --git a/llvm/include/llvm/Support/Program.h b/llvm/include/llvm/Support/Program.h
+index 9df94eb604..1fb86e9662 100644
+--- a/llvm/include/llvm/Support/Program.h
++++ b/llvm/include/llvm/Support/Program.h
+@@ -28,7 +28,7 @@ namespace sys {
+ 
+   /// This is the OS-specific separator for PATH like environment variables:
+   // a colon on Unix or a semicolon on Windows.
+-#if defined(LLVM_ON_UNIX)
++#if defined(LLVM_ON_UNIX) || defined(__crescent__)
+   const char EnvPathSeparator = ':';
+ #elif defined (_WIN32)
+   const char EnvPathSeparator = ';';
+@@ -37,6 +37,9 @@ namespace sys {
+ #if defined(_WIN32)
+   typedef unsigned long procid_t; // Must match the type of DWORD on Windows.
+   typedef void *process_t;        // Must match the type of HANDLE on Windows.
++#elif defined(__crescent__)
++  typedef size_t procid_t;
++  typedef size_t process_t;
+ #else
+   typedef ::pid_t procid_t;
+   typedef procid_t process_t;
+diff --git a/llvm/include/llvm/TargetParser/Triple.h b/llvm/include/llvm/TargetParser/Triple.h
+index 779bd9017d..4883121cfe 100644
+--- a/llvm/include/llvm/TargetParser/Triple.h
++++ b/llvm/include/llvm/TargetParser/Triple.h
+@@ -198,6 +198,7 @@ public:
+   enum OSType {
+     UnknownOS,
+ 
++    Crescent,
+     Darwin,
+     DragonFly,
+     FreeBSD,
+@@ -516,6 +517,10 @@ public:
+     return getOSVersion() < VersionTuple(Major, Minor, Micro);
+   }
+ 
++  bool isOSCrescent() const {
++    return getOS() == Triple::Crescent;
++  }
++
+   bool isOSVersionLT(const Triple &Other) const {
+     return getOSVersion() < Other.getOSVersion();
+   }
+diff --git a/llvm/lib/TargetParser/Triple.cpp b/llvm/lib/TargetParser/Triple.cpp
+index b271f29d26..3a8a40254d 100644
+--- a/llvm/lib/TargetParser/Triple.cpp
++++ b/llvm/lib/TargetParser/Triple.cpp
+@@ -257,6 +257,7 @@ StringRef Triple::getOSTypeName(OSType Kind) {
+   switch (Kind) {
+   case UnknownOS: return "unknown";
+ 
++  case Crescent: return "crescent";
+   case AIX: return "aix";
+   case AMDHSA: return "amdhsa";
+   case AMDPAL: return "amdpal";
+@@ -644,6 +645,7 @@ static Triple::VendorType parseVendor(StringRef VendorName) {
+ 
+ static Triple::OSType parseOS(StringRef OSName) {
+   return StringSwitch<Triple::OSType>(OSName)
++    .StartsWith("crescent", Triple::Crescent)
+     .StartsWith("darwin", Triple::Darwin)
+     .StartsWith("dragonfly", Triple::DragonFly)
+     .StartsWith("freebsd", Triple::FreeBSD)
+-- 
+2.45.2
+

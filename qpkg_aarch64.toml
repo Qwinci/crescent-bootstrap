@@ -1,0 +1,18 @@
+[general]
+target = "aarch64-unknown-crescent"
+sysroot = "sysroot"
+recipes_dir = "recipes"
+host_recipes_dir = "host-recipes"
+meta_dir = "meta_aarch64"
+build_root = "build_aarch64"
+arch = "aarch64"
+kernel_toolchain = "aarch64_clang"
+prefer_binaries = true
+
+[build]
+cc = "clang"
+cxx = "clang++"
+cflags = "-pipe"
+cxxflags = "-pipe"
+ldflags = "-fuse-ld=lld"
+

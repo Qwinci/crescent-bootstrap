@@ -1,0 +1,37 @@
+[general]
+name = "hzlibc"
+version = "1.0.0"
+src = ["https://github.com/Qwinci/hzlibc.git"]
+src_unpack_dir = "."
+depends = ["crescent"]
+workdir = "hzlibc"
+recurse_submodules = true
+
+[configure]
+args = [[
+	"cmake",
+	"-GNinja",
+	"-DCMAKE_C_COMPILER=clang",
+	"-DCMAKE_CXX_COMPILER=clang++",
+	"-DCMAKE_C_FLAGS=\"-I @SYSROOT@/usr/include\"",
+	"-DCMAKE_CXX_FLAGS=\"-I @SYSROOT@/usr/include\"",
+	"-DCMAKE_C_COMPILER_TARGET=@ARCH@-unknown-linux-gnu",
+	"-DCMAKE_CXX_COMPILER_TARGET=@ARCH@-unknown-linux-gnu",
+	"-DCMAKE_ASM_COMPILER_TARGET=@ARCH@-unknown-linux-gnu",
+	"-DCMAKE_SYSTEM_NAME=Crescent",
+	"-DCMAKE_SYSTEM_PROCESSOR=@ARCH@",
+	"-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY",
+	"-DCMAKE_INSTALL_PREFIX=/usr",
+	"-DANSI_ONLY=ON",
+	"@SRCDIR@"
+]]
+
+[build]
+args = [["ninja"]]
+
+[install]
+args = [["ninja", "install"]]
+env = [
+	{"DESTDIR" = "@DESTDIR@"}
+]
+

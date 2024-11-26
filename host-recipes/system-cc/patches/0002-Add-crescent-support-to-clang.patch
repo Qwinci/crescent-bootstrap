@@ -1,0 +1,684 @@
+From 8ccc0b340aa3c8feb6c70d70dce7d6909e61250b Mon Sep 17 00:00:00 2001
+From: Qwinci <32550582+Qwinci@users.noreply.github.com>
+Date: Mon, 25 Nov 2024 18:04:12 +0200
+Subject: [PATCH 2/6] Add crescent support to clang
+
+---
+ clang/lib/Basic/Targets.cpp              |   9 +
+ clang/lib/Basic/Targets/OSTargets.h      |  42 +++
+ clang/lib/Driver/CMakeLists.txt          |   1 +
+ clang/lib/Driver/Driver.cpp              |   4 +
+ clang/lib/Driver/ToolChains/Crescent.cpp | 440 +++++++++++++++++++++++
+ clang/lib/Driver/ToolChains/Crescent.h   |  92 +++++
+ 6 files changed, 588 insertions(+)
+ create mode 100644 clang/lib/Driver/ToolChains/Crescent.cpp
+ create mode 100644 clang/lib/Driver/ToolChains/Crescent.h
+
+diff --git a/clang/lib/Basic/Targets.cpp b/clang/lib/Basic/Targets.cpp
+index 0021d33c45..0141dd9eff 100644
+--- a/clang/lib/Basic/Targets.cpp
++++ b/clang/lib/Basic/Targets.cpp
+@@ -141,6 +141,9 @@ std::unique_ptr<TargetInfo> AllocateTarget(const llvm::Triple &Triple,
+       return std::make_unique<DarwinAArch64TargetInfo>(Triple, Opts);
+ 
+     switch (os) {
++    case llvm::Triple::Crescent:
++      return std::make_unique<CrescentTargetInfo<AArch64leTargetInfo>>(Triple,
++                                                                       Opts);
+     case llvm::Triple::FreeBSD:
+       return std::make_unique<FreeBSDTargetInfo<AArch64leTargetInfo>>(Triple,
+                                                                       Opts);
+@@ -524,6 +527,9 @@ std::unique_ptr<TargetInfo> AllocateTarget(const llvm::Triple &Triple,
+       return std::make_unique<DarwinI386TargetInfo>(Triple, Opts);
+ 
+     switch (os) {
++    case llvm::Triple::Crescent:
++      return std::make_unique<CrescentTargetInfo<X86_32TargetInfo>>(Triple,
++                                                                    Opts);
+     case llvm::Triple::Linux: {
+       switch (Triple.getEnvironment()) {
+       default:
+@@ -583,6 +589,9 @@ std::unique_ptr<TargetInfo> AllocateTarget(const llvm::Triple &Triple,
+       return std::make_unique<DarwinX86_64TargetInfo>(Triple, Opts);
+ 
+     switch (os) {
++    case llvm::Triple::Crescent:
++      return std::make_unique<CrescentTargetInfo<X86_64TargetInfo>>(Triple,
++                                                                    Opts);
+     case llvm::Triple::Linux: {
+       switch (Triple.getEnvironment()) {
+       default:
+diff --git a/clang/lib/Basic/Targets/OSTargets.h b/clang/lib/Basic/Targets/OSTargets.h
+index 75f53e96ce..65dd26ff65 100644
+--- a/clang/lib/Basic/Targets/OSTargets.h
++++ b/clang/lib/Basic/Targets/OSTargets.h
+@@ -137,6 +137,48 @@ public:
+   }
+ };
+ 
++// Crescent target
++template <typename Target>
++class LLVM_LIBRARY_VISIBILITY CrescentTargetInfo : public OSTargetInfo<Target> {
++protected:
++  void getOSDefines(const LangOptions &Opts, const llvm::Triple &Triple,
++                    MacroBuilder &Builder) const override {
++    // Linux defines; list based off of gcc output
++    DefineStd(Builder, "crescent", Opts);
++    if (this->HasFloat128)
++      Builder.defineMacro("__FLOAT128__");
++  }
++
++public:
++  CrescentTargetInfo(const llvm::Triple &Triple, const TargetOptions &Opts)
++      : OSTargetInfo<Target>(Triple, Opts) {
++    this->WIntType = TargetInfo::UnsignedInt;
++
++    switch (Triple.getArch()) {
++    default:
++      break;
++    case llvm::Triple::mips:
++    case llvm::Triple::mipsel:
++    case llvm::Triple::mips64:
++    case llvm::Triple::mips64el:
++    case llvm::Triple::ppc:
++    case llvm::Triple::ppcle:
++    case llvm::Triple::ppc64:
++    case llvm::Triple::ppc64le:
++      this->MCountName = "_mcount";
++      break;
++    case llvm::Triple::x86:
++    case llvm::Triple::x86_64:
++      this->HasFloat128 = true;
++      break;
++    }
++  }
++
++  const char *getStaticInitSectionSpecifier() const override {
++    return ".text.startup";
++  }
++};
++
+ // DragonFlyBSD Target
+ template <typename Target>
+ class LLVM_LIBRARY_VISIBILITY DragonFlyBSDTargetInfo
+diff --git a/clang/lib/Driver/CMakeLists.txt b/clang/lib/Driver/CMakeLists.txt
+index 4fd10bf671..74024f3175 100644
+--- a/clang/lib/Driver/CMakeLists.txt
++++ b/clang/lib/Driver/CMakeLists.txt
+@@ -46,6 +46,7 @@ add_clang_library(clangDriver
+   ToolChains/AMDGPUOpenMP.cpp
+   ToolChains/AVR.cpp
+   ToolChains/BareMetal.cpp
++  ToolChains/Crescent.cpp
+   ToolChains/Clang.cpp
+   ToolChains/CommonArgs.cpp
+   ToolChains/CrossWindows.cpp
+diff --git a/clang/lib/Driver/Driver.cpp b/clang/lib/Driver/Driver.cpp
+index a0f4329e36..97279bd40f 100644
+--- a/clang/lib/Driver/Driver.cpp
++++ b/clang/lib/Driver/Driver.cpp
+@@ -14,6 +14,7 @@
+ #include "ToolChains/Arch/RISCV.h"
+ #include "ToolChains/BareMetal.h"
+ #include "ToolChains/CSKYToolChain.h"
++#include "ToolChains/Crescent.h"
+ #include "ToolChains/Clang.h"
+ #include "ToolChains/CrossWindows.h"
+ #include "ToolChains/Cuda.h"
+@@ -6380,6 +6381,9 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
+   auto &TC = ToolChains[Target.str()];
+   if (!TC) {
+     switch (Target.getOS()) {
++    case llvm::Triple::Crescent:
++      TC = std::make_unique<toolchains::Crescent>(*this, Target, Args);
++      break;
+     case llvm::Triple::AIX:
+       TC = std::make_unique<toolchains::AIX>(*this, Target, Args);
+       break;
+diff --git a/clang/lib/Driver/ToolChains/Crescent.cpp b/clang/lib/Driver/ToolChains/Crescent.cpp
+new file mode 100644
+index 0000000000..1355090f16
+--- /dev/null
++++ b/clang/lib/Driver/ToolChains/Crescent.cpp
+@@ -0,0 +1,440 @@
++//===--- Crescent.cpp - Linux ToolChain Implementations --------------*- C++ -*-===//
++//
++// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
++// See https://llvm.org/LICENSE.txt for license information.
++// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
++//
++//===----------------------------------------------------------------------===//
++
++#include "Crescent.h"
++#include "CommonArgs.h"
++#include "clang/Config/config.h"
++#include "clang/Driver/Compilation.h"
++#include "clang/Driver/Driver.h"
++#include "clang/Driver/Options.h"
++#include "clang/Driver/SanitizerArgs.h"
++#include "llvm/Option/ArgList.h"
++#include "llvm/Support/Path.h"
++#include "llvm/Support/VirtualFileSystem.h"
++#include <system_error>
++
++using namespace clang::driver;
++using namespace clang::driver::toolchains;
++using namespace clang::driver::tools;
++using namespace clang;
++using namespace llvm::opt;
++
++using tools::addPathIfExists;
++
++static bool getStaticPIE(const ArgList &Args, const ToolChain &TC) {
++  bool HasStaticPIE = Args.hasArg(options::OPT_static_pie);
++  if (HasStaticPIE && Args.hasArg(options::OPT_no_pie)) {
++    const Driver &D = TC.getDriver();
++    const llvm::opt::OptTable &Opts = D.getOpts();
++    StringRef StaticPIEName = Opts.getOptionName(options::OPT_static_pie);
++    StringRef NoPIEName = Opts.getOptionName(options::OPT_nopie);
++    D.Diag(diag::err_drv_cannot_mix_options) << StaticPIEName << NoPIEName;
++  }
++  return HasStaticPIE;
++}
++
++static bool getStatic(const ArgList &Args) {
++  return Args.hasArg(options::OPT_static) &&
++      !Args.hasArg(options::OPT_static_pie);
++}
++
++static const char *getLDMOption(const llvm::Triple &T, const ArgList &Args) {
++  switch (T.getArch()) {
++  case llvm::Triple::x86:
++    return "elf_i386";
++  case llvm::Triple::aarch64:
++    return "aarch64linux";
++  case llvm::Triple::x86_64:
++    return "elf_x86_64";
++  default:
++    return nullptr;
++  }
++}
++
++void crescent::Linker::ConstructJob(Compilation &C, const JobAction &JA,
++                                    const InputInfo &Output,
++                                    const InputInfoList &Inputs,
++                                    const ArgList &Args,
++                                    const char *LinkingOutput) const {
++  const auto &ToolChain = static_cast<const Crescent &>(getToolChain());
++  const Driver &D = ToolChain.getDriver();
++
++  const llvm::Triple &Triple = getToolChain().getEffectiveTriple();
++
++  const llvm::Triple::ArchType Arch = ToolChain.getArch();
++  const bool IsStaticPIE = getStaticPIE(Args, ToolChain);
++  const bool IsStatic = getStatic(Args);
++
++  ArgStringList CmdArgs;
++
++  // Silence warning for "clang -g foo.o -o foo"
++  Args.ClaimAllArgs(options::OPT_g_Group);
++  // and "clang -emit-llvm foo.o -o foo"
++  Args.ClaimAllArgs(options::OPT_emit_llvm);
++  // and for "clang -w foo.o -o foo". Other warning options are already
++  // handled somewhere else.
++  Args.ClaimAllArgs(options::OPT_w);
++
++  if (!D.SysRoot.empty())
++    CmdArgs.push_back(Args.MakeArgString("--sysroot=" + D.SysRoot));
++
++  if (Args.hasArg(options::OPT_s))
++    CmdArgs.push_back("-s");
++
++  if (Triple.isAArch64()) {
++    CmdArgs.push_back("-EL");
++  }
++
++  if (Arch == llvm::Triple::aarch64) {
++    std::string CPU = getCPUName(D, Args, Triple);
++    if (CPU.empty() || CPU == "generic" || CPU == "cortex-a53")
++      CmdArgs.push_back("--fix-cortex-a53-843419");
++  }
++
++  ToolChain.addExtraOpts(CmdArgs);
++
++  CmdArgs.push_back("--eh-frame-hdr");
++
++  if (const char *LDMOption = getLDMOption(ToolChain.getTriple(), Args)) {
++    CmdArgs.push_back("-m");
++    CmdArgs.push_back(LDMOption);
++  } else {
++    D.Diag(diag::err_target_unknown_triple) << Triple.str();
++    return;
++  }
++
++  const bool IsShared = Args.hasArg(options::OPT_shared);
++  if (IsShared)
++    CmdArgs.push_back("-shared");
++  bool IsPIE = false;
++  if (IsStaticPIE) {
++    CmdArgs.push_back("-static");
++    CmdArgs.push_back("-pie");
++    CmdArgs.push_back("--no-dynamic-linker");
++    CmdArgs.push_back("-z");
++    CmdArgs.push_back("text");
++  } else if (IsStatic) {
++    CmdArgs.push_back("-static");
++  } else if (!Args.hasArg(options::OPT_r)) {
++    if (Args.hasArg(options::OPT_rdynamic))
++      CmdArgs.push_back("-export-dynamic");
++    if (!IsShared) {
++      IsPIE = Args.hasFlag(options::OPT_pie, options::OPT_no_pie,
++                           ToolChain.isPIEDefault(Args));
++      if (IsPIE)
++        CmdArgs.push_back("-pie");
++      CmdArgs.push_back("-dynamic-linker");
++      CmdArgs.push_back(Args.MakeArgString(Twine(D.DyldPrefix) +
++                                           ToolChain.getDynamicLinker(Args)));
++    }
++  }
++
++  CmdArgs.push_back("-o");
++  CmdArgs.push_back(Output.getFilename());
++
++  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles,
++                   options::OPT_r)) {
++	const char *crt1 = nullptr;
++	if (!Args.hasArg(options::OPT_shared)) {
++	if (IsPIE)
++		crt1 = "Scrt1.o";
++	else if (IsStaticPIE)
++		crt1 = "rcrt1.o";
++	else
++		crt1 = "crt1.o";
++	}
++	if (crt1)
++	  CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath(crt1)));
++
++	CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crti.o")));
++
++	std::string P;
++	std::string crtbegin = ToolChain.getCompilerRT(Args, "crtbegin",
++													ToolChain::FT_Object);
++	if (ToolChain.getVFS().exists(crtbegin))
++		P = crtbegin;
++
++	if (P.empty()) {
++	  const char *crtbegin;
++	  if (Args.hasArg(options::OPT_shared))
++		crtbegin = "crtbeginS.o";
++	  else if (IsStatic)
++		crtbegin = "crtbeginT.o";
++	  else if (IsPIE || IsStaticPIE)
++		crtbegin = "crtbeginS.o";
++	  else
++		crtbegin = "crtbegin.o";
++	  P = ToolChain.GetFilePath(crtbegin);
++	}
++	CmdArgs.push_back(Args.MakeArgString(P));
++
++    // Add crtfastmath.o if available and fast math is enabled.
++    ToolChain.addFastMathRuntimeIfAvailable(Args, CmdArgs);
++  }
++
++  Args.addAllArgs(CmdArgs, {options::OPT_L, options::OPT_u});
++
++  ToolChain.AddFilePathLibArgs(Args, CmdArgs);
++
++  if (D.isUsingLTO()) {
++    assert(!Inputs.empty() && "Must have at least one input.");
++    // Find the first filename InputInfo object.
++    auto Input = llvm::find_if(
++        Inputs, [](const InputInfo &II) -> bool { return II.isFilename(); });
++    if (Input == Inputs.end())
++      // For a very rare case, all of the inputs to the linker are
++      // InputArg. If that happens, just use the first InputInfo.
++      Input = Inputs.begin();
++
++    addLTOOptions(ToolChain, Args, CmdArgs, Output, *Input,
++                  D.getLTOMode() == LTOK_Thin);
++  }
++
++  if (Args.hasArg(options::OPT_Z_Xlinker__no_demangle))
++    CmdArgs.push_back("--no-demangle");
++
++  addLinkerCompressDebugSectionsOption(ToolChain, Args, CmdArgs);
++  AddLinkerInputs(ToolChain, Inputs, Args, CmdArgs, JA);
++
++  if (D.CCCIsCXX() &&
++      !Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs,
++                   options::OPT_r)) {
++    if (ToolChain.ShouldLinkCXXStdlib(Args)) {
++      bool OnlyLibstdcxxStatic = Args.hasArg(options::OPT_static_libstdcxx) &&
++                                 !Args.hasArg(options::OPT_static);
++      if (OnlyLibstdcxxStatic)
++        CmdArgs.push_back("-Bstatic");
++      ToolChain.AddCXXStdlibLibArgs(Args, CmdArgs);
++      if (OnlyLibstdcxxStatic)
++        CmdArgs.push_back("-Bdynamic");
++    }
++  }
++
++  // Silence warnings when linking C code with a C++ '-stdlib' argument.
++  Args.ClaimAllArgs(options::OPT_stdlib_EQ);
++
++  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_r)) {
++    if (!Args.hasArg(options::OPT_nodefaultlibs)) {
++      if (IsStatic || IsStaticPIE)
++        CmdArgs.push_back("--start-group");
++
++      AddRunTimeLibs(ToolChain, D, CmdArgs, Args);
++
++      if (!Args.hasArg(options::OPT_nolibc))
++        CmdArgs.push_back("-lc");
++
++      if (IsStatic || IsStaticPIE)
++        CmdArgs.push_back("--end-group");
++    }
++
++    if (!Args.hasArg(options::OPT_nostartfiles)) {
++      std::string P;
++      std::string crtend = ToolChain.getCompilerRT(Args, "crtend",
++                                                   ToolChain::FT_Object);
++      if (ToolChain.getVFS().exists(crtend))
++        P = crtend;
++      if (P.empty()) {
++        const char *crtend;
++        if (Args.hasArg(options::OPT_shared))
++          crtend = "crtendS.o";
++        else if (IsPIE || IsStaticPIE)
++          crtend = "crtendS.o";
++        else
++          crtend = "crtend.o";
++        P = ToolChain.GetFilePath(crtend);
++      }
++      CmdArgs.push_back(Args.MakeArgString(P));
++      CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crtn.o")));
++    }
++  }
++
++  Args.addAllArgs(CmdArgs, {options::OPT_T, options::OPT_t});
++
++  const char *Exec = Args.MakeArgString(ToolChain.GetLinkerPath());
++  C.addCommand(std::make_unique<Command>(JA, *this,
++                                         ResponseFileSupport::AtFileCurCP(),
++                                         Exec, CmdArgs, Inputs, Output));
++}
++
++void crescent::StaticLibTool::ConstructJob(Compilation &C, const JobAction &JA,
++                                           const InputInfo &Output,
++                                           const InputInfoList &Inputs,
++                                           const ArgList &Args,
++                                           const char *LinkingOutput) const {
++  const Driver &D = getToolChain().getDriver();
++
++  // Silence warning for "clang -g foo.o -o foo"
++  Args.ClaimAllArgs(options::OPT_g_Group);
++  // and "clang -emit-llvm foo.o -o foo"
++  Args.ClaimAllArgs(options::OPT_emit_llvm);
++  // and for "clang -w foo.o -o foo". Other warning options are already
++  // handled somewhere else.
++  Args.ClaimAllArgs(options::OPT_w);
++  // Silence warnings when linking C code with a C++ '-stdlib' argument.
++  Args.ClaimAllArgs(options::OPT_stdlib_EQ);
++
++  // ar tool command "llvm-ar <options> <output_file> <input_files>".
++  ArgStringList CmdArgs;
++  // Create and insert file members with a deterministic index.
++  CmdArgs.push_back("rcsD");
++  CmdArgs.push_back(Output.getFilename());
++
++  for (const auto &II : Inputs) {
++    if (II.isFilename()) {
++       CmdArgs.push_back(II.getFilename());
++    }
++  }
++
++  // Delete old output archive file if it already exists before generating a new
++  // archive file.
++  const char *OutputFileName = Output.getFilename();
++  if (Output.isFilename() && llvm::sys::fs::exists(OutputFileName)) {
++    if (std::error_code EC = llvm::sys::fs::remove(OutputFileName)) {
++      D.Diag(diag::err_drv_unable_to_remove_file) << EC.message();
++      return;
++    }
++  }
++
++  const char *Exec = Args.MakeArgString(getToolChain().GetStaticLibToolPath());
++  C.addCommand(std::make_unique<Command>(JA, *this,
++                                         ResponseFileSupport::AtFileCurCP(),
++                                         Exec, CmdArgs, Inputs, Output));
++}
++
++static StringRef getOSLibDir(const llvm::Triple &Triple, const ArgList &Args) {
++  return Triple.isArch32Bit() ? "lib32" : "lib";
++}
++
++Crescent::Crescent(const Driver &D, const llvm::Triple &Triple, const ArgList &Args)
++    : Generic_ELF(D, Triple, Args) {
++  llvm::Triple::ArchType Arch = Triple.getArch();
++  std::string SysRoot = computeSysRoot();
++  ToolChain::path_list &PPaths = getProgramPaths();
++
++  Generic_GCC::PushPPaths(PPaths);
++
++  ExtraOpts.push_back("-z");
++  ExtraOpts.push_back("now");
++  ExtraOpts.push_back("-z");
++  ExtraOpts.push_back("relro");
++
++  if (Arch == llvm::Triple::arm || Arch == llvm::Triple::thumb)
++    ExtraOpts.push_back("-X");
++
++
++  ExtraOpts.push_back("--hash-style=gnu");
++
++#ifdef ENABLE_LINKER_BUILD_ID
++  ExtraOpts.push_back("--build-id");
++#endif
++
++  // The selection of paths to try here is designed to match the patterns which
++  // the GCC driver itself uses, as this is part of the GCC-compatible driver.
++  // This was determined by running GCC in a fake filesystem, creating all
++  // possible permutations of these directories, and seeing which ones it added
++  // to the link paths.
++  path_list &Paths = getFilePaths();
++
++  const std::string OSLibDir = std::string(getOSLibDir(Triple, Args));
++
++  addPathIfExists(D, concat(SysRoot, "/usr/lib/..", OSLibDir), Paths);
++}
++
++ToolChain::RuntimeLibType Crescent::GetDefaultRuntimeLibType() const {
++  return ToolChain::RLT_CompilerRT;
++}
++
++unsigned Crescent::GetDefaultDwarfVersion() const {
++  return ToolChain::GetDefaultDwarfVersion();
++}
++
++ToolChain::CXXStdlibType Crescent::GetDefaultCXXStdlibType() const {
++  return ToolChain::CST_Libcxx;
++}
++
++void Crescent::AddCXXStdlibLibArgs(const llvm::opt::ArgList &Args,
++						llvm::opt::ArgStringList &CmdArgs) const {
++  CmdArgs.push_back("-lc++");
++}
++
++bool Crescent::HasNativeLLVMSupport() const { return true; }
++
++Tool *Crescent::buildLinker() const { return new tools::crescent::Linker(*this); }
++
++Tool *Crescent::buildStaticLibTool() const {
++  return new tools::crescent::StaticLibTool(*this);
++}
++
++std::string Crescent::computeSysRoot() const {
++  if (!getDriver().SysRoot.empty())
++    return getDriver().SysRoot;
++
++  return std::string();
++}
++
++std::string Crescent::getDynamicLinker(const ArgList &Args) const {
++  return "/usr/lib/libc.so";
++}
++
++void Crescent::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
++                                      ArgStringList &CC1Args) const {
++  const Driver &D = getDriver();
++  std::string SysRoot = computeSysRoot();
++
++  if (DriverArgs.hasArg(clang::driver::options::OPT_nostdinc))
++    return;
++
++  // Add 'include' in the resource directory, which is similar to
++  // GCC_INCLUDE_DIR (private headers) in GCC. Note: the include directory
++  // contains some files conflicting with system /usr/include. musl systems
++  // prefer the /usr/include copies which are more relevant.
++  SmallString<128> ResourceDirInclude(D.ResourceDir);
++  llvm::sys::path::append(ResourceDirInclude, "include");
++  if (!DriverArgs.hasArg(options::OPT_nobuiltininc))
++    addSystemInclude(DriverArgs, CC1Args, ResourceDirInclude);
++
++  if (DriverArgs.hasArg(options::OPT_nostdlibinc))
++    return;
++
++  // Check for configure-time C include directories.
++  StringRef CIncludeDirs(C_INCLUDE_DIRS);
++  if (CIncludeDirs != "") {
++    SmallVector<StringRef, 5> dirs;
++    CIncludeDirs.split(dirs, ":");
++    for (StringRef dir : dirs) {
++      StringRef Prefix =
++          llvm::sys::path::is_absolute(dir) ? "" : StringRef(SysRoot);
++      addExternCSystemInclude(DriverArgs, CC1Args, Prefix + dir);
++    }
++    return;
++  }
++
++  addExternCSystemInclude(DriverArgs, CC1Args, concat(SysRoot, "/usr/include"));
++}
++
++bool Crescent::isPIEDefault(const llvm::opt::ArgList &Args) const {
++  return true;
++}
++
++bool Crescent::IsAArch64OutlineAtomicsDefault(const ArgList &Args) const {
++  assert(getTriple().isAArch64() && "expected AArch64 target!");
++  return true;
++}
++
++bool Crescent::IsMathErrnoDefault() const {
++  return Generic_ELF::IsMathErrnoDefault();
++}
++
++void Crescent::addExtraOpts(llvm::opt::ArgStringList &CmdArgs) const {
++  for (const auto &Opt : ExtraOpts)
++    CmdArgs.push_back(Opt.c_str());
++}
++
++const char *Crescent::getDefaultLinker() const {
++  return "ld.lld";
++}
+diff --git a/clang/lib/Driver/ToolChains/Crescent.h b/clang/lib/Driver/ToolChains/Crescent.h
+new file mode 100644
+index 0000000000..d87c7a74b6
+--- /dev/null
++++ b/clang/lib/Driver/ToolChains/Crescent.h
+@@ -0,0 +1,92 @@
++//===--- Crescent.h - Crescent ToolChain Implementations --------------*- C++ -*-===//
++//
++// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
++// See https://llvm.org/LICENSE.txt for license information.
++// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
++//
++//===----------------------------------------------------------------------===//
++
++#ifndef LLVM_CLANG_LIB_DRIVER_TOOLCHAINS_CRESCENT_H
++#define LLVM_CLANG_LIB_DRIVER_TOOLCHAINS_CRESCENT_H
++
++#include "Gnu.h"
++#include "clang/Driver/ToolChain.h"
++
++namespace clang {
++namespace driver {
++namespace tools {
++namespace crescent {
++class LLVM_LIBRARY_VISIBILITY StaticLibTool : public Tool {
++public:
++  StaticLibTool(const ToolChain &TC)
++      : Tool("crescent::StaticLibTool", "llvm-ar", TC) {}
++
++  bool hasIntegratedCPP() const override { return false; }
++  bool isLinkJob() const override { return true; }
++
++  void ConstructJob(Compilation &C, const JobAction &JA,
++                    const InputInfo &Output, const InputInfoList &Inputs,
++                    const llvm::opt::ArgList &TCArgs,
++                    const char *LinkingOutput) const override;
++};
++
++class LLVM_LIBRARY_VISIBILITY Linker final : public Tool {
++public:
++  Linker(const ToolChain &TC) : Tool("crescent::Linker", "ld.lld", TC) {}
++
++  bool hasIntegratedCPP() const override { return false; }
++  bool isLinkJob() const override { return true; }
++
++  void ConstructJob(Compilation &C, const JobAction &JA,
++                    const InputInfo &Output, const InputInfoList &Inputs,
++                    const llvm::opt::ArgList &TCArgs,
++                    const char *LinkingOutput) const override;
++};
++} // end namespace crescent
++} // end namespace tools
++
++namespace toolchains {
++
++class LLVM_LIBRARY_VISIBILITY Crescent : public Generic_ELF {
++public:
++  Crescent(const Driver &D, const llvm::Triple &Triple,
++        const llvm::opt::ArgList &Args);
++
++  bool HasNativeLLVMSupport() const override;
++
++  void
++  AddClangSystemIncludeArgs(const llvm::opt::ArgList &DriverArgs,
++                            llvm::opt::ArgStringList &CC1Args) const override;
++  RuntimeLibType GetDefaultRuntimeLibType() const override;
++  unsigned GetDefaultDwarfVersion() const override;
++
++  CXXStdlibType GetDefaultCXXStdlibType() const override;
++  void AddCXXStdlibLibArgs(const llvm::opt::ArgList &Args,
++                           llvm::opt::ArgStringList &CmdArgs) const override;
++
++  bool
++  IsAArch64OutlineAtomicsDefault(const llvm::opt::ArgList &Args) const override;
++  bool isPIEDefault(const llvm::opt::ArgList &Args) const override;
++  bool IsMathErrnoDefault() const override;
++  std::string computeSysRoot() const override;
++
++  std::string getDynamicLinker(const llvm::opt::ArgList &Args) const override;
++
++  void addExtraOpts(llvm::opt::ArgStringList &CmdArgs) const override;
++
++  std::vector<std::string> ExtraOpts;
++
++  const char *getDefaultLinker() const override;
++
++  bool IsIntegratedAssemblerDefault() const override { return true; }
++
++protected:
++  Tool *buildLinker() const override;
++  Tool *buildStaticLibTool() const override;
++};
++
++} // end namespace toolchains
++} // end namespace driver
++} // end namespace clang
++
++#endif // LLVM_CLANG_LIB_DRIVER_TOOLCHAINS_CRESCENT_H
+-- 
+2.45.2
+

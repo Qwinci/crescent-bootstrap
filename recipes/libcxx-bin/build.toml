@@ -1,0 +1,13 @@
+[general]
+name = "libcxx"
+version = "1.0.0"
+src = []
+host_depends = ["system-cc-bin"]
+workdir = ""
+
+[install]
+args = [
+	["mkdir", "-p", "@DESTDIR@/usr/lib"],
+	["cp", "-r", "@BUILDROOT@/host_pkgs/system-cc-bin/lib/@TARGET@/.", "@DESTDIR@/usr/lib"]
+]
+

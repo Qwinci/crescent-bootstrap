@@ -1,0 +1,30 @@
+[general]
+name = "crescent"
+version = "1.0.0"
+src = ["https://github.com/Qwinci/crescent.git"]
+src_unpack_dir = "."
+workdir = "crescent"
+recurse_submodules = true
+host_depends = ["limine"]
+
+[configure]
+args = [[
+	"cmake",
+	"-GNinja",
+	"-DCMAKE_C_COMPILER=clang",
+	"-DCMAKE_CXX_COMPILER=clang++",
+	"-DCMAKE_INSTALL_PREFIX=/usr",
+	"-DCMAKE_TOOLCHAIN_FILE=@SRCDIR@/cmake/toolchain_@KERNEL_TOOLCHAIN@.cmake",
+	"-DBUILD_APPS=OFF",
+	"@SRCDIR@"
+]]
+
+[build]
+args = [["ninja"]]
+
+[install]
+args = [["ninja", "install"]]
+env = [
+	{"DESTDIR" = "@DESTDIR@"}
+]
+

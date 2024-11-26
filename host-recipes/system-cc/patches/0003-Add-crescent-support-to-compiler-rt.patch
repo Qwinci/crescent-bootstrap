@@ -1,0 +1,61 @@
+From 0698ab57f8b73fa181dd517d54facb2b58dd1a63 Mon Sep 17 00:00:00 2001
+From: Qwinci <32550582+Qwinci@users.noreply.github.com>
+Date: Mon, 25 Nov 2024 18:05:26 +0200
+Subject: [PATCH 3/6] Add crescent support to compiler-rt
+
+---
+ compiler-rt/lib/builtins/emutls.c               | 4 ++++
+ compiler-rt/lib/builtins/enable_execute_stack.c | 4 +++-
+ 2 files changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/compiler-rt/lib/builtins/emutls.c b/compiler-rt/lib/builtins/emutls.c
+index 390ffb25f6..495da4a690 100644
+--- a/compiler-rt/lib/builtins/emutls.c
++++ b/compiler-rt/lib/builtins/emutls.c
+@@ -12,6 +12,8 @@
+ 
+ #include "int_lib.h"
+ 
++#ifndef __crescent__
++
+ #ifdef __BIONIC__
+ // There are 4 pthread key cleanup rounds on Bionic. Delay emutls deallocation
+ // to round 2. We need to delay deallocation because:
+@@ -406,3 +408,5 @@ __attribute__((visibility("hidden"))) void __emutls_unregister_key(void) {
+   }
+ }
+ #endif
++
++#endif
+diff --git a/compiler-rt/lib/builtins/enable_execute_stack.c b/compiler-rt/lib/builtins/enable_execute_stack.c
+index e18de4eaeb..814e1833d5 100644
+--- a/compiler-rt/lib/builtins/enable_execute_stack.c
++++ b/compiler-rt/lib/builtins/enable_execute_stack.c
+@@ -8,7 +8,7 @@
+ 
+ #include "int_lib.h"
+ 
+-#ifndef _WIN32
++#if !defined(_WIN32) && !defined(__crescent__)
+ #include <sys/mman.h>
+ #endif
+ 
+@@ -20,6 +20,7 @@
+ #ifdef _WIN32
+ #define WIN32_LEAN_AND_MEAN
+ #include <windows.h>
++#elif defined(__crescent__)
+ #else
+ #ifndef __APPLE__
+ #include <unistd.h>
+@@ -46,6 +47,7 @@ COMPILER_RT_ABI void __enable_execute_stack(void *addr) {
+     return; // We should probably assert here because there is no return value
+   VirtualProtect(mbi.BaseAddress, mbi.RegionSize, PAGE_EXECUTE_READWRITE,
+                  &mbi.Protect);
++#elif defined(__crescent__)
+ #else
+ #if __APPLE__
+   // On Darwin, pagesize is always 4096 bytes
+-- 
+2.45.2
+

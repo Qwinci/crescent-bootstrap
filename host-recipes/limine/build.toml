@@ -1,0 +1,28 @@
+[general]
+name = "limine"
+version = "8.4.0"
+src = [
+	"https://github.com/limine-bootloader/limine/archive/b9c91372b1f188902b97b4fca489fb0c16f1f871.tar.gz"
+]
+workdir = "limine-b9c91372b1f188902b97b4fca489fb0c16f1f871"
+
+[configure]
+args = [[
+	"cp", "-r", "@SRCDIR@/.", "."
+]]
+
+[build]
+args = [
+	["make"]
+]
+
+[install]
+args = [
+	["make", "install"],
+	["mv", "@DESTDIR@/bin/limine", "@DESTDIR@/share/limine"]
+]
+env = [
+	{"PREFIX" = "/"},
+	{"DESTDIR" = "@DESTDIR@"}
+]
+

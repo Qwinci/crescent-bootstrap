@@ -1,0 +1,26 @@
+diff --git a/lib/readline/terminal.c b/lib/readline/terminal.c
+index 9997161..770f262 100644
+--- a/lib/readline/terminal.c
++++ b/lib/readline/terminal.c
+@@ -103,7 +103,7 @@ static char *term_string_buffer = (char *)NULL;
+ static int tcap_initialized;
+ 
+ #if !defined (__linux__) && !defined (NCURSES_VERSION)
+-#  if defined (__EMX__) || defined (NEED_EXTERN_PC)
++#  if defined (__EMX__) || defined (NEED_EXTERN_PC) || defined(__crescent__)
+ extern 
+ #  endif /* __EMX__ || NEED_EXTERN_PC */
+ char PC, *BC, *UP;
+diff --git a/lib/termcap/tparam.c b/lib/termcap/tparam.c
+index c4bff08..0d2ae7d 100644
+--- a/lib/termcap/tparam.c
++++ b/lib/termcap/tparam.c
+@@ -56,6 +56,8 @@ char *realloc ();
+ 
+ #include "ltcap.h"
+ 
++#include <unistd.h>
++
+ #ifndef NULL
+ #define NULL (char *) 0
+ #endif

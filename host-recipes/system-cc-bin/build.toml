@@ -2,25 +2,24 @@
 name = "system-cc"
 version = "20.0.0-e59582b"
 src = [
-	"https://github.com/Qwinci/crescent-bootstrap/raw/refs/heads/binary-system-cc/system-cc-@ARCH@.tar.gz.00",
-	"https://github.com/Qwinci/crescent-bootstrap/raw/refs/heads/binary-system-cc/system-cc-@ARCH@.tar.gz.01",
-	"https://github.com/Qwinci/crescent-bootstrap/raw/refs/heads/binary-system-cc/system-cc-@ARCH@.tar.gz.02",
-	"https://github.com/Qwinci/crescent-bootstrap/raw/refs/heads/binary-system-cc/system-cc-@ARCH@.tar.gz.03",
-	"https://github.com/Qwinci/crescent-bootstrap/raw/refs/heads/binary-system-cc/system-cc-@ARCH@.tar.gz.04",
-	"https://github.com/Qwinci/crescent-bootstrap/raw/refs/heads/binary-system-cc/system-cc-@ARCH@.tar.gz.05"
+	"https://github.com/Qwinci/crescent-binaries/raw/refs/heads/main/system-cc-@ARCH@.tar.zstd00",
+	"https://github.com/Qwinci/crescent-binaries/raw/refs/heads/main/system-cc-@ARCH@.tar.zstd01",
+	"https://github.com/Qwinci/crescent-binaries/raw/refs/heads/main/system-cc-@ARCH@.tar.zstd02",
+	"https://github.com/Qwinci/crescent-binaries/raw/refs/heads/main/system-cc-@ARCH@.tar.zstd03",
+	"https://github.com/Qwinci/crescent-binaries/raw/refs/heads/main/system-cc-@ARCH@.tar.zstd04",
+	"https://github.com/Qwinci/crescent-binaries/raw/refs/heads/main/system-cc-@ARCH@.tar.zstd05"
 ]
 depends = ["hzlibc"]
 workdir = "system-cc"
 
 [prepare]
 args = [
-	["cat", "@BUILDROOT@/archives/system-cc-@ARCH@.tar.gz.*", ">", "system-cc-@ARCH@.tar.gz"],
-	["tar", "--strip-components=1", "-xf", "system-cc-@ARCH@.tar.gz"]
+	["cat", "@BUILDROOT@/archives/system-cc-@ARCH@.tar.zstd*", ">", "system-cc-@ARCH@.tar.zst"]
 ]
 
 [install]
 args = [
 	["mkdir", "-p", "@DESTDIR@"],
-	["tar", "-C", "@DESTDIR@", "--strip-components=1", "-xf", "@SRCDIR@/system-cc-@ARCH@.tar.gz"]
+	["tar", "-C", "@DESTDIR@", "--strip-components=1", "-xf", "@SRCDIR@/system-cc-@ARCH@.tar.zst"]
 ]
 

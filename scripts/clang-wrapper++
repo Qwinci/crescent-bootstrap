@@ -1,0 +1,4 @@
+#!/bin/sh
+
+clang++ --sysroot="$QPKG_SYSROOT_DIR" "$@"
+

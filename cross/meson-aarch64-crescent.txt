@@ -1,0 +1,11 @@
+[binaries]
+ar = 'llvm-ar'
+strip = 'llvm-strip'
+pkg-config = 'aarch64-unknown-crescent-pkg-config'
+
+[host_machine]
+system = 'crescent'
+cpu_family = 'aarch64'
+cpu = 'aarch64'
+endian = 'little'
+

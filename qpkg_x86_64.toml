@@ -16,3 +16,9 @@ cflags = "-pipe"
 cxxflags = "-pipe"
 ldflags = "-fuse-ld=lld"
 
+[target]
+cc = "@BUILDROOT@/../scripts/clang-wrapper"
+cxx = "@BUILDROOT@/../scripts/clang-wrapper++"
+cflags = "-pipe"
+cxxflags = "-pipe"
+ldflags = "-fuse-ld=lld"

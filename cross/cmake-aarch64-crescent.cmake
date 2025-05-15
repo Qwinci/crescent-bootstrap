@@ -2,6 +2,7 @@ set(CMAKE_SYSTEM_NAME Crescent)
 set(CMAKE_SYSTEM_PROCESSOR aarch64)
 
 set(CMAKE_FIND_ROOT_PATH $ENV{QPKG_SYSROOT_DIR})
+set(CMAKE_SYSROOT $ENV{QPKG_SYSROOT_DIR})
 
 set(CMAKE_C_COMPILER clang)
 set(CMAKE_CXX_COMPILER clang++)
@@ -12,10 +13,8 @@ set(CMAKE_C_COMPILER_TARGET aarch64-unknown-crescent)
 set(CMAKE_CXX_COMPILER_TARGET aarch64-unknown-crescent)
 set(CMAKE_ASM_COMPILER_TARGET aarch64-unknown-crescent)
 
-set(CMAKE_C_FLAGS "--sysroot=$ENV{QPKG_SYSROOT_DIR} -fdiagnostics-color")
-set(CMAKE_CXX_FLAGS "--sysroot=$ENV{QPKG_SYSROOT_DIR} -fdiagnostics-color")
-set(CMAKE_EXE_LINKER_FLAGS "--sysroot=$ENV{QPKG_SYSROOT_DIR}")
-set(CMAKE_SHARED_LINKER_FLAGS "--sysroot=$ENV{QPKG_SYSROOT_DIR}")
+set(CMAKE_C_FLAGS "-fdiagnostics-color")
+set(CMAKE_CXX_FLAGS "-fdiagnostics-color")
 
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 

@@ -11,11 +11,13 @@ host_depends = ["limine"]
 args = [[
 	"cmake",
 	"-GNinja",
+	"-DCMAKE_BUILD_TYPE=Debug",
 	"-DCMAKE_C_COMPILER=clang",
 	"-DCMAKE_CXX_COMPILER=clang++",
 	"-DCMAKE_INSTALL_PREFIX=/usr",
 	"-DCMAKE_TOOLCHAIN_FILE=@SRCDIR@/cmake/toolchain_@KERNEL_TOOLCHAIN@.cmake",
 	"-DBUILD_APPS=OFF",
+	"-DBOARD=$CRESCENT_BOARD",
 	"@SRCDIR@"
 ]]
 

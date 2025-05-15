@@ -1,6 +1,6 @@
 [general]
 target = "aarch64-unknown-crescent"
-sysroot = "sysroot"
+sysroot = "sysroot_aarch64"
 recipes_dir = "recipes"
 host_recipes_dir = "host-recipes"
 meta_dir = "meta_aarch64"

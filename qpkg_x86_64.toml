@@ -1,10 +1,10 @@
 [general]
 target = "x86_64-unknown-crescent"
-sysroot = "sysroot"
+sysroot = "sysroot_x86_64"
 recipes_dir = "recipes"
 host_recipes_dir = "host-recipes"
 meta_dir = "meta"
-build_root = "build"
+build_root = "build_x86_64"
 arch = "x86_64"
 kernel_toolchain = "x86_64_clang"
 prefer_binaries = true

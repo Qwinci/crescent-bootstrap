@@ -10,13 +10,18 @@ if [[ -z "${IMAGE_SIZE}" ]]; then
 	exit 1
 fi
 
-rm -f image
-fallocate -l ${IMAGE_SIZE} image
+if [[ -z "${IMAGE_PATH}" ]]; then
+	echo "IMAGE_PATH is unset" 1>&2
+	exit 1
+fi
 
-parted -s image mklabel gpt
-parted -s image mkpart ESP fat32 2048s 100%
+rm -f "$IMAGE_PATH"
+fallocate -l ${IMAGE_SIZE} "$IMAGE_PATH"
 
-loop_dev=$(sudo losetup -Pf --show image)
+parted -s "$IMAGE_PATH" mklabel gpt
+parted -s "$IMAGE_PATH" mkpart ESP fat32 2048s 100%
+
+loop_dev=$(sudo losetup -Pf --show "$IMAGE_PATH")
 sudo mkfs.vfat -F32 "${loop_dev}p1"
 
 mkdir -p mountpoint

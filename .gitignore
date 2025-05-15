@@ -1,8 +1,12 @@
-build*
-sysroot
-crescent
-hzlibc
-image
-initramfs.tar
-meta*
+/build*
+/sysroot*
+/crescent
+/hzlibc
+/image*
+/initramfs.tar*
+/meta*
+/iso_root
+/mountpoint
+/boot.img
+/netdump.dat
 

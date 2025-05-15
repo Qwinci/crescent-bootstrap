@@ -1,21 +1,21 @@
-From 8ccc0b340aa3c8feb6c70d70dce7d6909e61250b Mon Sep 17 00:00:00 2001
+From 82d647c35fcbd46c068008c682d3ec27d6ac74f5 Mon Sep 17 00:00:00 2001
 From: Qwinci <32550582+Qwinci@users.noreply.github.com>
-Date: Mon, 25 Nov 2024 18:04:12 +0200
-Subject: [PATCH 2/6] Add crescent support to clang
+Date: Wed, 1 Jan 2025 13:59:57 +0200
+Subject: [PATCH 2/3] Add crescent support to clang
 
 ---
  clang/lib/Basic/Targets.cpp              |   9 +
- clang/lib/Basic/Targets/OSTargets.h      |  42 +++
+ clang/lib/Basic/Targets/OSTargets.h      |  46 +++
  clang/lib/Driver/CMakeLists.txt          |   1 +
  clang/lib/Driver/Driver.cpp              |   4 +
  clang/lib/Driver/ToolChains/Crescent.cpp | 440 +++++++++++++++++++++++
  clang/lib/Driver/ToolChains/Crescent.h   |  92 +++++
- 6 files changed, 588 insertions(+)
+ 6 files changed, 592 insertions(+)
  create mode 100644 clang/lib/Driver/ToolChains/Crescent.cpp
  create mode 100644 clang/lib/Driver/ToolChains/Crescent.h
 
 diff --git a/clang/lib/Basic/Targets.cpp b/clang/lib/Basic/Targets.cpp
-index 0021d33c45..0141dd9eff 100644
+index 0021d33c4..0141dd9ef 100644
 --- a/clang/lib/Basic/Targets.cpp
 +++ b/clang/lib/Basic/Targets.cpp
 @@ -141,6 +141,9 @@ std::unique_ptr<TargetInfo> AllocateTarget(const llvm::Triple &Triple,
@@ -49,10 +49,10 @@ index 0021d33c45..0141dd9eff 100644
        switch (Triple.getEnvironment()) {
        default:
 diff --git a/clang/lib/Basic/Targets/OSTargets.h b/clang/lib/Basic/Targets/OSTargets.h
-index 75f53e96ce..65dd26ff65 100644
+index 75f53e96c..584b777a2 100644
 --- a/clang/lib/Basic/Targets/OSTargets.h
 +++ b/clang/lib/Basic/Targets/OSTargets.h
-@@ -137,6 +137,48 @@ public:
+@@ -137,6 +137,52 @@ public:
    }
  };
  
@@ -62,8 +62,12 @@ index 75f53e96ce..65dd26ff65 100644
 +protected:
 +  void getOSDefines(const LangOptions &Opts, const llvm::Triple &Triple,
 +                    MacroBuilder &Builder) const override {
-+    // Linux defines; list based off of gcc output
 +    DefineStd(Builder, "crescent", Opts);
++    DefineStd(Builder, "unix", Opts);
++    if (Opts.POSIXThreads)
++      Builder.defineMacro("_REENTRANT");
++    if (Opts.CPlusPlus)
++      Builder.defineMacro("_GNU_SOURCE");
 +    if (this->HasFloat128)
 +      Builder.defineMacro("__FLOAT128__");
 +  }
@@ -102,7 +106,7 @@ index 75f53e96ce..65dd26ff65 100644
  template <typename Target>
  class LLVM_LIBRARY_VISIBILITY DragonFlyBSDTargetInfo
 diff --git a/clang/lib/Driver/CMakeLists.txt b/clang/lib/Driver/CMakeLists.txt
-index 4fd10bf671..74024f3175 100644
+index 4fd10bf67..74024f317 100644
 --- a/clang/lib/Driver/CMakeLists.txt
 +++ b/clang/lib/Driver/CMakeLists.txt
 @@ -46,6 +46,7 @@ add_clang_library(clangDriver
@@ -114,7 +118,7 @@ index 4fd10bf671..74024f3175 100644
    ToolChains/CommonArgs.cpp
    ToolChains/CrossWindows.cpp
 diff --git a/clang/lib/Driver/Driver.cpp b/clang/lib/Driver/Driver.cpp
-index a0f4329e36..97279bd40f 100644
+index a0f4329e3..97279bd40 100644
 --- a/clang/lib/Driver/Driver.cpp
 +++ b/clang/lib/Driver/Driver.cpp
 @@ -14,6 +14,7 @@
@@ -137,7 +141,7 @@ index a0f4329e36..97279bd40f 100644
        break;
 diff --git a/clang/lib/Driver/ToolChains/Crescent.cpp b/clang/lib/Driver/ToolChains/Crescent.cpp
 new file mode 100644
-index 0000000000..1355090f16
+index 000000000..1355090f1
 --- /dev/null
 +++ b/clang/lib/Driver/ToolChains/Crescent.cpp
 @@ -0,0 +1,440 @@
@@ -583,7 +587,7 @@ index 0000000000..1355090f16
 +}
 diff --git a/clang/lib/Driver/ToolChains/Crescent.h b/clang/lib/Driver/ToolChains/Crescent.h
 new file mode 100644
-index 0000000000..d87c7a74b6
+index 000000000..d87c7a74b
 --- /dev/null
 +++ b/clang/lib/Driver/ToolChains/Crescent.h
 @@ -0,0 +1,92 @@

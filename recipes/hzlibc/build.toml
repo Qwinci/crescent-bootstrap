@@ -3,7 +3,7 @@ name = "hzlibc"
 version = "1.0.0"
 src = ["https://github.com/Qwinci/hzlibc.git"]
 src_unpack_dir = "."
-depends = ["crescent"]
+depends = ["crescent", "linux-headers"]
 workdir = "hzlibc"
 recurse_submodules = true
 
@@ -13,8 +13,8 @@ args = [[
 	"-GNinja",
 	"-DCMAKE_C_COMPILER=clang",
 	"-DCMAKE_CXX_COMPILER=clang++",
-	"-DCMAKE_C_FLAGS=\"-I @SYSROOT@/usr/include\"",
-	"-DCMAKE_CXX_FLAGS=\"-I @SYSROOT@/usr/include\"",
+	"-DCMAKE_C_FLAGS=\"-I '@BUILDROOT@/pkgs/crescent/usr/include'\"",
+	"-DCMAKE_CXX_FLAGS=\"-I '@BUILDROOT@/pkgs/crescent/usr/include'\"",
 	"-DCMAKE_C_COMPILER_TARGET=@ARCH@-unknown-linux-gnu",
 	"-DCMAKE_CXX_COMPILER_TARGET=@ARCH@-unknown-linux-gnu",
 	"-DCMAKE_ASM_COMPILER_TARGET=@ARCH@-unknown-linux-gnu",
@@ -22,7 +22,7 @@ args = [[
 	"-DCMAKE_SYSTEM_PROCESSOR=@ARCH@",
 	"-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY",
 	"-DCMAKE_INSTALL_PREFIX=/usr",
-	"-DANSI_ONLY=ON",
+	"-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
 	"@SRCDIR@"
 ]]
 

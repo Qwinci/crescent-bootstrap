@@ -2,7 +2,7 @@
 name = "libcxx"
 version = "1.0.0"
 src = []
-host_depends = ["system-cc-bin"]
+host_depends = ["system-cc"]
 workdir = ""
 
 [install]

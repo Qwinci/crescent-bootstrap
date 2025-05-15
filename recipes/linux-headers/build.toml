@@ -1,0 +1,28 @@
+[general]
+name = "linux-headers"
+version = "6.12.8"
+src = ["https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-@VERSION@.tar.xz"]
+workdir = "linux-@VERSION@"
+
+[build]
+args = [["""
+LINUX_ARCH=@ARCH@;
+case $LINUX_ARCH in
+	aarch64)
+		LINUX_ARCH=arm64
+		;;
+	riscv64)
+		LINUX_ARCH=riscv
+		;;
+esac;
+make -C '@SRCDIR@' ARCH=$LINUX_ARCH O=$PWD/out headers_install -j@THREADS@
+"""
+]]
+
+[install]
+args = [
+	["find", "out/usr/include", "-type", "f", "!", "-name", "'*.h'", "-delete"],
+	["mkdir", "-p", "@DESTDIR@/usr"],
+	["cp", "-r", "out/usr/include", "@DESTDIR@/usr/"]
+]
+

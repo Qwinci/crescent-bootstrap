@@ -10,6 +10,9 @@ DTB ?= "$(current_dir)/dtb"
 all:
 	CRESCENT_BOARD=$(BOARD) qpkg --config=$(current_dir)/qpkg_$(ARCH).toml rebuild crescent
 
+ci:
+	CRESCENT_BOARD=$(BOARD) qpkg --config=$(current_dir)/qpkg_$(ARCH).toml rebuild crescent crescent-apps
+
 initramfs:
 	tar -cf $(initrd) -C sysroot_$(ARCH) .
 
